@@ -107,8 +107,48 @@ runs:
           TAG_VERSION=""
         fi
 
-        # Get last tag and parse version
-        if git describe --tags --always --long 2>/dev/null | grep -q "^${PREFIX}"; then
+        # Determine version based on context
+        if [[ "$IS_RELEASE" == "true" ]]; then
+          # Release build: triggered by tag push, use tag version directly
+          if [[ $TAG_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR=${BASH_REMATCH[1]}
+            MINOR=${BASH_REMATCH[2]}
+            PATCH=${BASH_REMATCH[3]}
+          else
+            MAJOR=0; MINOR=0; PATCH=0
+          fi
+          COMMITS=0
+          VERSION="${TAG_VERSION}"
+          VERSION_TAG="${PREFIX}${TAG_VERSION}"
+          VERSION_CORE="${TAG_VERSION}"
+          LAST_VERSION="${TAG_VERSION}"
+          LAST_TAG="${PREFIX}${TAG_VERSION}"
+          NEXT_PATCH=$((PATCH + 1))
+          NEXT_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}"
+          IS_PRERELEASE="false"
+
+        elif [[ "$IS_TAGGED" == "true" && -n "$CURRENT_TAG" ]]; then
+          # Current commit has a version tag pointing at it
+          TAGGED_VERSION="${CURRENT_TAG#${PREFIX}}"
+          if [[ $TAGGED_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR=${BASH_REMATCH[1]}
+            MINOR=${BASH_REMATCH[2]}
+            PATCH=${BASH_REMATCH[3]}
+          else
+            MAJOR=0; MINOR=0; PATCH=0
+          fi
+          COMMITS=0
+          VERSION="${TAGGED_VERSION}"
+          VERSION_TAG="${CURRENT_TAG}"
+          VERSION_CORE="${TAGGED_VERSION}"
+          LAST_VERSION="${TAGGED_VERSION}"
+          LAST_TAG="${CURRENT_TAG}"
+          NEXT_PATCH=$((PATCH + 1))
+          NEXT_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}"
+          IS_PRERELEASE="false"
+
+        elif git describe --tags --always --long 2>/dev/null | grep -q "^${PREFIX}"; then
+          # Use git describe to find version from ancestor tags
           DESCRIBE=$(git describe --tags --always --long 2>/dev/null)
 
           # Parse: vMAJOR.MINOR.PATCH-COMMITS-gHASH
@@ -124,14 +164,8 @@ runs:
             NEXT_PATCH=$((PATCH + 1))
             NEXT_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}"
 
-            if [[ "$IS_RELEASE" == "true" ]]; then
-              # Release build: use tag version directly
-              VERSION="${TAG_VERSION}"
-              VERSION_TAG="${PREFIX}${TAG_VERSION}"
-              VERSION_CORE="${TAG_VERSION}"
-              IS_PRERELEASE="false"
-            elif [[ "$COMMITS" == "0" ]]; then
-              # Exactly on a tag
+            if [[ "$COMMITS" == "0" ]]; then
+              # Exactly on a tag (via git describe)
               VERSION="${MAJOR}.${MINOR}.${PATCH}"
               VERSION_TAG="${PREFIX}${VERSION}"
               VERSION_CORE="${VERSION}"

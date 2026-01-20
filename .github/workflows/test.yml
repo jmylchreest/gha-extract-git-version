@@ -1,0 +1,94 @@
+name: Test Action
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test Version Extraction
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run action
+        id: version
+        uses: ./
+
+      - name: Verify outputs
+        run: |
+          echo "=== Version Outputs ==="
+          echo "version: ${{ steps.version.outputs.version }}"
+          echo "version_tag: ${{ steps.version.outputs.version_tag }}"
+          echo "version_core: ${{ steps.version.outputs.version_core }}"
+          echo ""
+          echo "=== Components ==="
+          echo "major: ${{ steps.version.outputs.major }}"
+          echo "minor: ${{ steps.version.outputs.minor }}"
+          echo "patch: ${{ steps.version.outputs.patch }}"
+          echo "commits: ${{ steps.version.outputs.commits }}"
+          echo ""
+          echo "=== Previous/Next ==="
+          echo "last_version: ${{ steps.version.outputs.last_version }}"
+          echo "last_tag: ${{ steps.version.outputs.last_tag }}"
+          echo "next_version: ${{ steps.version.outputs.next_version }}"
+          echo ""
+          echo "=== State Flags ==="
+          echo "is_tagged: ${{ steps.version.outputs.is_tagged }}"
+          echo "is_release: ${{ steps.version.outputs.is_release }}"
+          echo "is_prerelease: ${{ steps.version.outputs.is_prerelease }}"
+          echo ""
+          echo "=== Build Metadata ==="
+          echo "sha: ${{ steps.version.outputs.sha }}"
+          echo "sha_full: ${{ steps.version.outputs.sha_full }}"
+          echo "date: ${{ steps.version.outputs.date }}"
+          echo "dirty: ${{ steps.version.outputs.dirty }}"
+
+      - name: Validate required outputs exist
+        run: |
+          # Check that critical outputs are non-empty
+          [[ -n "${{ steps.version.outputs.version }}" ]] || { echo "ERROR: version is empty"; exit 1; }
+          [[ -n "${{ steps.version.outputs.version_tag }}" ]] || { echo "ERROR: version_tag is empty"; exit 1; }
+          [[ -n "${{ steps.version.outputs.sha }}" ]] || { echo "ERROR: sha is empty"; exit 1; }
+          [[ -n "${{ steps.version.outputs.date }}" ]] || { echo "ERROR: date is empty"; exit 1; }
+
+          # Validate version format (should be semver-ish)
+          if [[ ! "${{ steps.version.outputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "ERROR: version doesn't match semver pattern"
+            exit 1
+          fi
+
+          echo "All validations passed!"
+
+  test-release-simulation:
+    name: Test Release Tag Simulation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create test tag
+        run: |
+          git config user.name "Test"
+          git config user.email "test@test.com"
+          git tag v99.99.99
+
+      - name: Run action on tagged commit
+        id: version
+        uses: ./
+
+      - name: Verify tagged commit behavior
+        run: |
+          echo "Version: ${{ steps.version.outputs.version }}"
+          echo "Is Tagged: ${{ steps.version.outputs.is_tagged }}"
+
+          [[ "${{ steps.version.outputs.is_tagged }}" == "true" ]] || { echo "ERROR: is_tagged should be true"; exit 1; }
+          [[ "${{ steps.version.outputs.version }}" == "99.99.99" ]] || { echo "ERROR: version should be 99.99.99"; exit 1; }
+
+          echo "Tagged commit test passed!"

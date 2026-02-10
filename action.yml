@@ -173,7 +173,7 @@ runs:
             else
               # Dev build: increment patch, add prerelease
               VERSION="${NEXT_VERSION}-dev.${COMMITS}+${HASH}"
-              VERSION_TAG="${PREFIX}${NEXT_VERSION}-dev.${COMMITS}-${HASH}"
+              VERSION_TAG="${PREFIX}${NEXT_VERSION}-dev.${COMMITS}"
               VERSION_CORE="${NEXT_VERSION}"
               IS_PRERELEASE="true"
             fi
@@ -187,7 +187,7 @@ runs:
             LAST_TAG=""
             NEXT_VERSION="0.0.1"
             VERSION="0.0.1-dev.0+${SHA}"
-            VERSION_TAG="${PREFIX}0.0.1-dev.0-${SHA}"
+            VERSION_TAG="${PREFIX}0.0.1-dev.0"
             VERSION_CORE="0.0.1"
             IS_PRERELEASE="true"
           fi
@@ -201,7 +201,7 @@ runs:
           LAST_TAG=""
           NEXT_VERSION="0.0.1"
           VERSION="0.0.1-dev.${COMMITS}+${SHA}"
-          VERSION_TAG="${PREFIX}0.0.1-dev.${COMMITS}-${SHA}"
+          VERSION_TAG="${PREFIX}0.0.1-dev.${COMMITS}"
           VERSION_CORE="0.0.1"
           IS_PRERELEASE="true"
         fi

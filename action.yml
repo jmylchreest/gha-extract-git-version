@@ -6,6 +6,10 @@ inputs:
     description: 'Tag prefix (default: v)'
     required: false
     default: 'v'
+  exclude:
+    description: 'Glob pattern passed to git describe --exclude to skip matching tags. Set to empty string to disable. (default: *-* which excludes pre-release tags)'
+    required: false
+    default: '*-*'
 
 outputs:
   # Core version components
@@ -77,6 +81,13 @@ runs:
       shell: bash
       run: |
         PREFIX="${{ inputs.prefix }}"
+        EXCLUDE="${{ inputs.exclude }}"
+
+        # Build git describe flags
+        DESCRIBE_FLAGS=(--tags --always --long --match "${PREFIX}[0-9]*.[0-9]*.[0-9]*")
+        if [[ -n "$EXCLUDE" ]]; then
+          DESCRIBE_FLAGS+=(--exclude "$EXCLUDE")
+        fi
 
         # Build metadata
         SHA_FULL=$(git rev-parse HEAD)
@@ -147,9 +158,9 @@ runs:
           NEXT_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}"
           IS_PRERELEASE="false"
 
-        elif git describe --tags --always --long --match "${PREFIX}[0-9]*.[0-9]*.[0-9]*" 2>/dev/null | grep -q "^${PREFIX}"; then
-          # Use git describe to find version from ancestor tags (only match clean semver tags)
-          DESCRIBE=$(git describe --tags --always --long --match "${PREFIX}[0-9]*.[0-9]*.[0-9]*" 2>/dev/null)
+        elif git describe "${DESCRIBE_FLAGS[@]}" 2>/dev/null | grep -q "^${PREFIX}"; then
+          # Use git describe to find version from ancestor tags
+          DESCRIBE=$(git describe "${DESCRIBE_FLAGS[@]}" 2>/dev/null)
 
           # Parse: vMAJOR.MINOR.PATCH-COMMITS-gHASH
           if [[ $DESCRIBE =~ ^${PREFIX}([0-9]+)\.([0-9]+)\.([0-9]+)-([0-9]+)-g([a-f0-9]+)$ ]]; then

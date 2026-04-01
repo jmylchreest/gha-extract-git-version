@@ -101,8 +101,10 @@ runs:
           DIRTY="true"
         fi
 
-        # Check if current commit has a version tag
-        CURRENT_TAG=$(git tag --points-at HEAD | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+$" | head -1 || true)
+        # Check if current commit has a version tag.
+        # When multiple release tags point at HEAD, use the lowest semver
+        # to prevent stray high-version tags from hijacking the version.
+        CURRENT_TAG=$(git tag --points-at HEAD | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | head -1 || true)
         if [[ -n "$CURRENT_TAG" ]]; then
           IS_TAGGED="true"
         else
@@ -164,11 +166,32 @@ runs:
 
           # Parse: vMAJOR.MINOR.PATCH-COMMITS-gHASH
           if [[ $DESCRIBE =~ ^${PREFIX}([0-9]+)\.([0-9]+)\.([0-9]+)-([0-9]+)-g([a-f0-9]+)$ ]]; then
-            MAJOR=${BASH_REMATCH[1]}
-            MINOR=${BASH_REMATCH[2]}
-            PATCH=${BASH_REMATCH[3]}
+            DESCRIBE_TAG="${PREFIX}${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
             COMMITS=${BASH_REMATCH[4]}
             HASH=${BASH_REMATCH[5]}
+
+            # Resolve ambiguity: when multiple non-prerelease tags point to
+            # the same ancestor commit, git describe's choice depends on git
+            # version and pack ordering. Always prefer the lowest semver to
+            # prevent stray tags from hijacking the version calculation.
+            ANCESTOR_COMMIT=$(git rev-list -n 1 "$DESCRIBE_TAG" 2>/dev/null)
+            if [[ -n "$ANCESTOR_COMMIT" ]]; then
+              BEST_TAG=$(git tag --points-at "$ANCESTOR_COMMIT" \
+                | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+$" \
+                | sort -V | head -1)
+              if [[ -n "$BEST_TAG" && "$BEST_TAG" != "$DESCRIBE_TAG" ]]; then
+                echo "::warning::git describe selected ${DESCRIBE_TAG} but ${BEST_TAG} is the lowest semver on that commit — using ${BEST_TAG}"
+                DESCRIBE_TAG="$BEST_TAG"
+              fi
+            fi
+
+            # Parse the (possibly corrected) base tag
+            BASE_VERSION="${DESCRIBE_TAG#${PREFIX}}"
+            if [[ $BASE_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              MAJOR=${BASH_REMATCH[1]}
+              MINOR=${BASH_REMATCH[2]}
+              PATCH=${BASH_REMATCH[3]}
+            fi
 
             LAST_VERSION="${MAJOR}.${MINOR}.${PATCH}"
             LAST_TAG="${PREFIX}${LAST_VERSION}"
